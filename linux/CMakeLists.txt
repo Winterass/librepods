@@ -28,6 +28,9 @@ qt_add_executable(librepods
     autostartmanager.hpp
     BasicControlCommand.hpp
     deviceinfo.hpp
+    ble/aacptransport.h
+    ble/qt_aacptransport.cpp
+    ble/qt_aacptransport.h
     ble/bleutils.cpp
     ble/bleutils.h
     ble/blemanager.cpp
