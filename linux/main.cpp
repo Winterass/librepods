@@ -24,6 +24,7 @@
 #include "deviceinfo.hpp"
 #include "ble/blemanager.h"
 #include "ble/bleutils.h"
+#include "ble/qt_aacptransport.h"
 #include "QRCodeImageProvider.hpp"
 #include "systemsleepmonitor.hpp"
 
@@ -82,6 +83,21 @@ public:
         connect(m_systemSleepMonitor, &SystemSleepMonitor::systemGoingToSleep, this, &AirPodsTrayApp::onSystemGoingToSleep);
         connect(m_systemSleepMonitor, &SystemSleepMonitor::systemWakingUp, this, &AirPodsTrayApp::onSystemWakingUp);
 
+        m_aacpTransport = new QtAACPTransport(this);
+        m_aacpTransport->setPacketCallback([this](const QByteArray &data)
+        {
+            QMetaObject::invokeMethod(this, "parseData", Qt::QueuedConnection, Q_ARG(QByteArray, data));
+            QMetaObject::invokeMethod(this, "relayPacketToPhone", Qt::QueuedConnection, Q_ARG(QByteArray, data));
+        });
+        m_aacpTransport->setConnectedCallback([this]()
+        {
+            sendHandshake();
+        });
+        connect(m_aacpTransport, &AACPTransport::disconnected, this, [this]()
+        {
+            emit airPodsStatusChanged();
+        });
+
         // Load settings
         CrossDevice.isEnabled = loadCrossDeviceEnabled();
         setEarDetectionBehavior(loadEarDetectionSettings());
@@ -118,11 +134,10 @@ public:
         saveCrossDeviceEnabled();
         saveEarDetectionSettings();
 
-        delete socket;
         delete phoneSocket;
     }
 
-    bool areAirpodsConnected() const { return socket && socket->isOpen() && socket->state() == QBluetoothSocket::SocketState::ConnectedState; }
+    bool areAirpodsConnected() const { return m_aacpTransport && m_aacpTransport->isConnected(); }
     int earDetectionBehavior() const { return mediaController->getEarDetectionBehavior(); }
     bool crossDeviceEnabled() const { return CrossDevice.isEnabled; }
     AutoStartManager *autoStartManager() const { return m_autoStartManager; }
@@ -240,6 +255,10 @@ public slots:
         {
             LOG_DEBUG("Setting retry attempts to: " << attempts);
             m_retryAttempts = attempts;
+            if (m_aacpTransport)
+            {
+                m_aacpTransport->setRetryAttempts(attempts);
+            }
             emit retryAttemptsChanged(attempts);
             saveRetryAttempts(attempts);
         }
@@ -247,7 +266,7 @@ public slots:
 
     void initiateMagicPairing()
     {
-        if (!socket || !socket->isOpen())
+        if (!m_aacpTransport || !m_aacpTransport->isConnected())
         {
             LOG_ERROR("Socket nicht offen, Magic Pairing kann nicht gestartet werden");
             return;
@@ -381,17 +400,14 @@ public slots:
 
     bool writePacketToSocket(const QByteArray &packet, const QString &logMessage)
     {
-        if (socket && socket->isOpen())
+        if (m_aacpTransport && m_aacpTransport->sendPacket(packet))
         {
-            socket->write(packet);
             LOG_DEBUG(logMessage << packet.toHex());
             return true;
         }
-        else
-        {
-            LOG_ERROR("Socket is not open, cannot write packet");
-            return false;
-        }
+
+        LOG_ERROR("Socket is not open, cannot write packet");
+        return false;
     }
 
     bool loadCrossDeviceEnabled() { return m_settings->value("crossdevice/enabled", false).toBool(); }
@@ -502,11 +518,10 @@ private slots:
     void onDeviceDisconnected(const QBluetoothAddress &address)
     {
         LOG_INFO("Device disconnected: " << address.toString());
-        if (socket)
+        if (m_aacpTransport)
         {
             LOG_WARN("Socket is still open, closing it");
-            socket->close();
-            socket = nullptr;
+            m_aacpTransport->disconnectFromDevice();
         }
         if (phoneSocket && phoneSocket->isOpen())
         {
@@ -596,7 +611,7 @@ private slots:
 
     void connectToDevice(const QBluetoothDeviceInfo &device)
     {
-        if (socket && socket->isOpen() && socket->peerAddress() == device.address())
+        if (m_aacpTransport && m_aacpTransport->isConnected() && m_aacpTransport->address() == device.address().toString())
         {
             LOG_INFO("Already connected to the device: " << device.name());
             return;
@@ -604,53 +619,8 @@ private slots:
 
         LOG_INFO("Connecting to device: " << device.name());
 
-        // Clean up any existing socket
-        if (socket)
-        {
-            socket->close();
-            socket->deleteLater();
-            socket = nullptr;
-        }
-
-        QBluetoothSocket *localSocket = new QBluetoothSocket(QBluetoothServiceInfo::L2capProtocol);
-        socket = localSocket;
-
-        // Connection handler
-        auto handleConnection = [this, localSocket]()
-        {
-            connect(localSocket, &QBluetoothSocket::readyRead, this, [this, localSocket]()
-                    {
-            QByteArray data = localSocket->readAll();
-            QMetaObject::invokeMethod(this, "parseData", Qt::QueuedConnection, Q_ARG(QByteArray, data));
-            QMetaObject::invokeMethod(this, "relayPacketToPhone", Qt::QueuedConnection, Q_ARG(QByteArray, data)); });
-            sendHandshake();
-        };
-
-        // Error handler with retry
-        auto handleError = [this, device, localSocket](QBluetoothSocket::SocketError error)
-        {
-            LOG_ERROR("Socket error: " << error << ", " << localSocket->errorString());
-
-            static int retryCount = 0;
-            if (retryCount < m_retryAttempts)
-            {
-                retryCount++;
-                LOG_INFO("Retrying connection (attempt " << retryCount << ")");
-                QTimer::singleShot(1500, this, [this, device]()
-                                   { connectToDevice(device); });
-            }
-            else
-            {
-                LOG_ERROR("Failed to connect after 3 attempts");
-                retryCount = 0;
-            }
-        };
-
-        connect(localSocket, &QBluetoothSocket::connected, this, handleConnection);
-        connect(localSocket, QOverload<QBluetoothSocket::SocketError>::of(&QBluetoothSocket::errorOccurred),
-                this, handleError);
-
-        localSocket->connectToService(device.address(), QBluetoothUuid("74ec2172-0bad-4d01-8f77-997b2be0722a"));
+        m_aacpTransport->setRetryAttempts(m_retryAttempts);
+        m_aacpTransport->setupSession(device);
         m_deviceInfo->setBluetoothAddress(device.address().toString());
         notifyAndroidDevice();
     }
@@ -811,8 +781,8 @@ private slots:
         if (packet.startsWith(AirPodsPackets::Phone::NOTIFICATION))
         {
             QByteArray airpodsPacket = packet.mid(4);
-            if (socket && socket->isOpen()) {
-                socket->write(airpodsPacket);
+            if (m_aacpTransport && m_aacpTransport->isConnected()) {
+                m_aacpTransport->sendPacket(airpodsPacket);
                 LOG_DEBUG("Relayed packet to AirPods: " << airpodsPacket.toHex());
             } else {
                 LOG_ERROR("Socket is not open, cannot relay packet to AirPods");
@@ -833,16 +803,16 @@ private slots:
         else if (packet.startsWith(AirPodsPackets::Phone::STATUS_REQUEST))
         {
             LOG_INFO("Connection status request received");
-            QByteArray response = (socket && socket->isOpen()) ? AirPodsPackets::Phone::CONNECTED
-                                                               : AirPodsPackets::Phone::DISCONNECTED;
+            QByteArray response = (m_aacpTransport && m_aacpTransport->isConnected()) ? AirPodsPackets::Phone::CONNECTED
+                                                                                      : AirPodsPackets::Phone::DISCONNECTED;
             phoneSocket->write(response);
             LOG_DEBUG("Sent connection status response: " << response.toHex());
         }
         else if (packet.startsWith(AirPodsPackets::Phone::DISCONNECT_REQUEST))
         {
             LOG_INFO("Disconnect request received");
-            if (socket && socket->isOpen()) {
-                socket->close();
+            if (m_aacpTransport && m_aacpTransport->isConnected()) {
+                m_aacpTransport->disconnectFromDevice();
                 LOG_INFO("Disconnected from AirPods");
                 QProcess process;
                 process.start("bluetoothctl", QStringList() << "disconnect" << m_deviceInfo->bluetoothAddress());
@@ -855,8 +825,8 @@ private slots:
         }
         else
         {
-            if (socket && socket->isOpen()) {
-                socket->write(packet);
+            if (m_aacpTransport && m_aacpTransport->isConnected()) {
+                m_aacpTransport->sendPacket(packet);
                 LOG_DEBUG("Relayed packet to AirPods: " << packet.toHex());
             } else {
                 LOG_ERROR("Socket is not open, cannot relay packet to AirPods");
@@ -909,7 +879,7 @@ public:
     }
 
     void connectToAirPods(bool force) {
-        if (socket && socket->isOpen()) {
+        if (m_aacpTransport && m_aacpTransport->isConnected()) {
             LOG_INFO("Already connected to AirPods");
             return;
         }
@@ -967,7 +937,7 @@ signals:
     void hearingAidEnabledChanged(bool enabled);
 
 private:
-    QBluetoothSocket *socket = nullptr;
+    AACPTransport *m_aacpTransport = nullptr;
     QBluetoothSocket *phoneSocket = nullptr;
     QByteArray lastBatteryStatus;
     QByteArray lastEarDetectionStatus;
