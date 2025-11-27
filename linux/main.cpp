@@ -12,6 +12,9 @@
 #include <QTimer>
 #include <QProcess>
 #include <QRegularExpression>
+#ifdef Q_OS_WIN
+#include <Windows.h>
+#endif
 
 #include "airpods_packets.h"
 #include "logger.h"
@@ -48,6 +51,13 @@ class AirPodsTrayApp : public QObject {
     Q_PROPERTY(DeviceInfo *deviceInfo READ deviceInfo CONSTANT)
     Q_PROPERTY(QString phoneMacStatus READ phoneMacStatus NOTIFY phoneMacStatusChanged)
     Q_PROPERTY(bool hearingAidEnabled READ hearingAidEnabled WRITE setHearingAidEnabled NOTIFY hearingAidEnabledChanged)
+    Q_PROPERTY(bool driverInstalled READ driverInstalled NOTIFY driverStatusChanged)
+    Q_PROPERTY(bool testModeEnabled READ testModeEnabled NOTIFY driverStatusChanged)
+    Q_PROPERTY(QString driverStatus READ driverStatus NOTIFY driverStatusChanged)
+    Q_PROPERTY(bool runningAsAdmin READ runningAsAdmin NOTIFY adminStatusChanged)
+    Q_PROPERTY(bool pairingReady READ pairingReady NOTIFY pairingStatusChanged)
+    Q_PROPERTY(QString pairingStatus READ pairingStatus NOTIFY pairingStatusChanged)
+    Q_PROPERTY(bool onboardingRequired READ onboardingRequired NOTIFY onboardingRequiredChanged)
 
 public:
     AirPodsTrayApp(bool debugMode, bool hideOnStart, QQmlApplicationEngine *parent = nullptr)
@@ -72,6 +82,8 @@ public:
         connect(m_deviceInfo, &DeviceInfo::conversationalAwarenessChanged, trayManager, &TrayIconManager::updateConversationalAwareness);
         connect(trayManager, &TrayIconManager::notificationsEnabledChanged, this, &AirPodsTrayApp::saveNotificationsEnabled);
         connect(trayManager, &TrayIconManager::notificationsEnabledChanged, this, &AirPodsTrayApp::notificationsEnabledChanged);
+        connect(m_deviceInfo, &DeviceInfo::bluetoothAddressChanged, this, &AirPodsTrayApp::refreshPairingStatus);
+        connect(this, &AirPodsTrayApp::airPodsStatusChanged, this, &AirPodsTrayApp::refreshPairingStatus);
 
         // Initialize MediaController and connect signals
         mediaController = new MediaController(this);
@@ -111,6 +123,9 @@ public:
         CrossDevice.isEnabled = loadCrossDeviceEnabled();
         setEarDetectionBehavior(loadEarDetectionSettings());
         setRetryAttempts(loadRetryAttempts());
+
+        refreshDriverStatus();
+        refreshPairingStatus();
 
         if (m_bluetoothMonitor)
         {
@@ -160,6 +175,13 @@ public:
     DeviceInfo *deviceInfo() const { return m_deviceInfo; }
     QString phoneMacStatus() const { return m_phoneMacStatus; }
     bool hearingAidEnabled() const { return m_deviceInfo->hearingAidEnabled(); }
+    bool driverInstalled() const { return m_driverInstalled; }
+    bool testModeEnabled() const { return m_testModeEnabled; }
+    QString driverStatus() const { return m_driverStatus; }
+    bool runningAsAdmin() const { return m_runningAsAdmin; }
+    bool pairingReady() const { return m_pairingReady; }
+    QString pairingStatus() const { return m_pairingStatus; }
+    bool onboardingRequired() const { return m_onboardingRequired; }
 
 private:
     bool debugMode;
@@ -433,6 +455,130 @@ public slots:
 
     int loadRetryAttempts() const { return m_settings->value("bluetooth/retryAttempts", 3).toInt(); }
     void saveRetryAttempts(int attempts) { m_settings->setValue("bluetooth/retryAttempts", attempts); }
+
+    void refreshDriverStatus()
+    {
+#ifdef Q_OS_WIN
+        bool installed = queryDriverInstalled();
+        bool testMode = queryTestModeEnabled();
+        bool admin = queryRunningAsAdmin();
+        QString status = installed ? QStringLiteral("KMDF transport driver installed")
+                                   : QStringLiteral("KMDF transport driver missing");
+
+        if (!testMode)
+        {
+            status += QStringLiteral(" • Enable test signing for unsigned builds");
+        }
+        if (!admin)
+        {
+            status += QStringLiteral(" • Administrator rights required for installation");
+        }
+#else
+        bool installed = true;
+        bool testMode = true;
+        bool admin = true;
+        QString status = QStringLiteral("Driver setup not required on this platform");
+#endif
+
+        bool driverChanged = installed != m_driverInstalled || testMode != m_testModeEnabled || status != m_driverStatus;
+        bool adminChanged = admin != m_runningAsAdmin;
+
+        m_driverInstalled = installed;
+        m_testModeEnabled = testMode;
+        m_driverStatus = status;
+        m_runningAsAdmin = admin;
+
+        if (driverChanged)
+        {
+            emit driverStatusChanged();
+        }
+        if (adminChanged)
+        {
+            emit adminStatusChanged();
+        }
+
+        updateOnboardingRequired();
+    }
+
+    void refreshPairingStatus()
+    {
+        bool ready = m_deviceInfo && !m_deviceInfo->bluetoothAddress().isEmpty();
+        QString status;
+        if (!m_deviceInfo)
+        {
+            status = QStringLiteral("Device info unavailable");
+        }
+        else if (!ready)
+        {
+            status = QStringLiteral("AirPods not paired yet");
+        }
+        else if (areAirpodsConnected())
+        {
+            status = QStringLiteral("Connected");
+        }
+        else
+        {
+            status = QStringLiteral("Paired, waiting for connection");
+        }
+
+        if (ready != m_pairingReady || status != m_pairingStatus)
+        {
+            m_pairingReady = ready;
+            m_pairingStatus = status;
+            emit pairingStatusChanged();
+            updateOnboardingRequired();
+        }
+    }
+
+    void updateOnboardingRequired()
+    {
+        bool required = requiresDriverSetup() && ((!m_pairingReady) || (!m_driverInstalled || !m_testModeEnabled || !m_runningAsAdmin));
+        if (required != m_onboardingRequired)
+        {
+            m_onboardingRequired = required;
+            emit onboardingRequiredChanged();
+        }
+    }
+
+    bool requiresDriverSetup() const
+    {
+#ifdef Q_OS_WIN
+        return true;
+#else
+        return false;
+#endif
+    }
+
+#ifdef Q_OS_WIN
+    bool queryDriverInstalled() const
+    {
+        QSettings driverReg(QStringLiteral("HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\AacpTransportDriver"), QSettings::NativeFormat);
+        return !driverReg.allKeys().isEmpty() || !driverReg.childGroups().isEmpty();
+    }
+
+    bool queryTestModeEnabled() const
+    {
+        QProcess process;
+        process.start(QStringLiteral("bcdedit"), {QStringLiteral("/enum")});
+        process.waitForFinished(1500);
+        const QString output = QString::fromLocal8Bit(process.readAllStandardOutput());
+        return output.contains(QStringLiteral("testsigning Yes"), Qt::CaseInsensitive)
+               || output.contains(QStringLiteral("TESTSIGNING ON"), Qt::CaseInsensitive);
+    }
+
+    bool queryRunningAsAdmin() const
+    {
+        BOOL isAdmin = FALSE;
+        PSID adminGroup = nullptr;
+        SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+        if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup))
+        {
+            CheckTokenMembership(nullptr, adminGroup, &isAdmin);
+            FreeSid(adminGroup);
+        }
+        return isAdmin == TRUE;
+    }
+#endif
 
     void onSystemGoingToSleep()
     {
@@ -959,6 +1105,10 @@ signals:
     void oneBudANCModeChanged(bool enabled);
     void phoneMacStatusChanged();
     void hearingAidEnabledChanged(bool enabled);
+    void driverStatusChanged();
+    void adminStatusChanged();
+    void pairingStatusChanged();
+    void onboardingRequiredChanged();
 
 private:
     AACPTransport *m_aacpTransport = nullptr;
@@ -975,6 +1125,13 @@ private:
     IBluetoothMonitor *m_bluetoothMonitor = nullptr;
     SystemSleepMonitor *m_systemSleepMonitor = nullptr;
     QString m_phoneMacStatus;
+    bool m_driverInstalled = false;
+    bool m_testModeEnabled = true;
+    QString m_driverStatus;
+    bool m_runningAsAdmin = true;
+    bool m_pairingReady = false;
+    QString m_pairingStatus;
+    bool m_onboardingRequired = false;
 };
 
 int main(int argc, char *argv[]) {
