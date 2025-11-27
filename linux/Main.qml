@@ -52,12 +52,28 @@ ApplicationWindow {
     StackView {
         id: stackView
         anchors.fill: parent
-        initialItem: mainPage
+        initialItem: airPodsTrayApp.onboardingRequired ? onboardingPage : mainPage
+    }
+
+    Connections {
+        target: airPodsTrayApp
+        function onOnboardingRequiredChanged() {
+            if (!airPodsTrayApp.onboardingRequired && stackView.currentItem && stackView.currentItem.objectName === "onboardingPageObject") {
+                stackView.replace(mainPage)
+            }
+        }
     }
 
     FontLoader {
         id: iconFont
         source: "qrc:/icons/assets/fonts/SF-Symbols-6.ttf"
+    }
+
+    Component {
+        id: onboardingPage
+        Onboarding {
+            onContinueRequested: stackView.replace(mainPage)
+        }
     }
 
     Component {
