@@ -27,7 +27,7 @@
 #endif
 #include "autostartmanager.hpp"
 #include "deviceinfo.hpp"
-#include "ble/bleutils.h"
+#include "bluetooth/BleCryptoUtils.h"
 #include "ble/qt_aacptransport.h"
 #include "QRCodeImageProvider.hpp"
 #include "systemsleepmonitor.hpp"

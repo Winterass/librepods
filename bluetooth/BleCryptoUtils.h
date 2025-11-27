@@ -2,12 +2,13 @@
 
 #include <QObject>
 #include <QByteArray>
+#include <QString>
 
-class BLEUtils : public QObject
+class BleCryptoUtils : public QObject
 {
     Q_OBJECT
 public:
-    explicit BLEUtils(QObject *parent = nullptr);
+    explicit BleCryptoUtils(QObject *parent = nullptr);
 
     /**
      * @brief Verifies if the provided Bluetooth address is an RPA that matches the given Identity Resolving Key (IRK)
