@@ -1,16 +1,18 @@
-#include "BluetoothMonitor.h"
+#include "BluezBluetoothMonitor.h"
 #include "logger.h"
 
 #include <QDebug>
 #include <QDBusObjectPath>
 #include <QDBusMetaType>
 
-BluetoothMonitor::BluetoothMonitor(QObject *parent)
-    : QObject(parent), m_dbus(QDBusConnection::systemBus())
+BluezBluetoothMonitor::BluezBluetoothMonitor(QObject *parent)
+    : IBluetoothMonitor(parent), m_dbus(QDBusConnection::systemBus()), m_bleManager(new BleManager(this))
 {
     // Register meta-types for D-Bus interaction
     qDBusRegisterMetaType<QDBusObjectPath>();
     qDBusRegisterMetaType<ManagedObjectList>();
+
+    connect(m_bleManager, &BleManager::deviceFound, this, &BluezBluetoothMonitor::deviceFound);
 
     if (!m_dbus.isConnected())
     {
@@ -19,15 +21,45 @@ BluetoothMonitor::BluetoothMonitor(QObject *parent)
     }
 
     registerDBusService();
-    checkAlreadyConnectedDevices(); // Check for already connected devices on startup
 }
 
-BluetoothMonitor::~BluetoothMonitor()
+BluezBluetoothMonitor::~BluezBluetoothMonitor()
 {
+    if (m_bleManager)
+    {
+        m_bleManager->stopScan();
+    }
     m_dbus.disconnectFromBus(m_dbus.name());
 }
 
-void BluetoothMonitor::registerDBusService()
+void BluezBluetoothMonitor::start()
+{
+    checkAlreadyConnectedDevices();
+    startScan();
+}
+
+void BluezBluetoothMonitor::startScan()
+{
+    if (m_bleManager)
+    {
+        m_bleManager->startScan();
+    }
+}
+
+void BluezBluetoothMonitor::stopScan()
+{
+    if (m_bleManager)
+    {
+        m_bleManager->stopScan();
+    }
+}
+
+bool BluezBluetoothMonitor::isScanning() const
+{
+    return m_bleManager && m_bleManager->isScanning();
+}
+
+void BluezBluetoothMonitor::registerDBusService()
 {
     // Match signals for PropertiesChanged on any BlueZ Device interface
     if (!m_dbus.connect("", "", "org.freedesktop.DBus.Properties", "PropertiesChanged",
@@ -37,7 +69,7 @@ void BluetoothMonitor::registerDBusService()
     }
 }
 
-bool BluetoothMonitor::isAirPodsDevice(const QString &devicePath)
+bool BluezBluetoothMonitor::isAirPodsDevice(const QString &devicePath)
 {
     QDBusInterface deviceInterface("org.bluez", devicePath, "org.freedesktop.DBus.Properties", m_dbus);
 
@@ -52,7 +84,7 @@ bool BluetoothMonitor::isAirPodsDevice(const QString &devicePath)
     return uuids.contains("74ec2172-0bad-4d01-8f77-997b2be0722a");
 }
 
-QString BluetoothMonitor::getDeviceName(const QString &devicePath)
+QString BluezBluetoothMonitor::getDeviceName(const QString &devicePath)
 {
     QDBusInterface deviceInterface("org.bluez", devicePath, "org.freedesktop.DBus.Properties", m_dbus);
     QDBusReply<QVariant> nameReply = deviceInterface.call("Get", "org.bluez.Device1", "Name");
@@ -63,8 +95,13 @@ QString BluetoothMonitor::getDeviceName(const QString &devicePath)
     return "Unknown";
 }
 
-bool BluetoothMonitor::checkAlreadyConnectedDevices()
+bool BluezBluetoothMonitor::checkAlreadyConnectedDevices()
 {
+    if (!m_dbus.isConnected())
+    {
+        return false;
+    }
+
     QDBusInterface objectManager("org.bluez", "/", "org.freedesktop.DBus.ObjectManager", m_dbus);
     QDBusMessage reply = objectManager.call("GetManagedObjects");
 
@@ -117,7 +154,7 @@ bool BluetoothMonitor::checkAlreadyConnectedDevices()
     return deviceFound;
 }
 
-void BluetoothMonitor::onPropertiesChanged(const QString &interface, const QVariantMap &changedProps, const QStringList &invalidatedProps)
+void BluezBluetoothMonitor::onPropertiesChanged(const QString &interface, const QVariantMap &changedProps, const QStringList &invalidatedProps)
 {
     Q_UNUSED(invalidatedProps);
 
