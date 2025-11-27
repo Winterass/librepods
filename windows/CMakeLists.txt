@@ -5,17 +5,20 @@ project(librepods_windows_monitor LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Bluetooth)
+find_package(OpenSSL REQUIRED)
 
 add_library(librepods_windows_monitor STATIC
     bluetooth/WindowsBluetoothMonitor.cpp
     bluetooth/WindowsBluetoothMonitor.h
     ../bluetooth/BleInfo.h
+    ../bluetooth/BleCryptoUtils.cpp
+    ../bluetooth/BleCryptoUtils.h
     ../bluetooth/IBluetoothMonitor.h
     ../linux/ble/blemanager.cpp
     ../linux/ble/blemanager.h
 )
 
-target_link_libraries(librepods_windows_monitor PRIVATE Qt6::Bluetooth)
+target_link_libraries(librepods_windows_monitor PRIVATE Qt6::Bluetooth OpenSSL::Crypto)
 
 target_include_directories(librepods_windows_monitor
     PRIVATE

@@ -42,8 +42,8 @@ qt_add_executable(librepods
     ble/aacptransport.h
     ble/qt_aacptransport.cpp
     ble/qt_aacptransport.h
-    ble/bleutils.cpp
-    ble/bleutils.h
+    ../bluetooth/BleCryptoUtils.cpp
+    ../bluetooth/BleCryptoUtils.h
     ble/blemanager.cpp
     ble/blemanager.h
     thirdparty/QR-Code-generator/qrcodegen.cpp
