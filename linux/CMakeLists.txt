@@ -4,10 +4,19 @@ project(linux VERSION 0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick Widgets Bluetooth DBus)
+option(LIBREPODS_ENABLE_WINDOWS_TARGET "Enable building the Windows monitor target" OFF)
+
+set(QT_REQUIRED_COMPONENTS Quick Widgets Bluetooth)
+if(NOT WIN32)
+    list(APPEND QT_REQUIRED_COMPONENTS DBus)
+endif()
+
+find_package(Qt6 REQUIRED COMPONENTS ${QT_REQUIRED_COMPONENTS})
 find_package(OpenSSL REQUIRED)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(PULSEAUDIO REQUIRED libpulse)
+if(NOT WIN32)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(PULSEAUDIO REQUIRED libpulse)
+endif()
 
 qt_standard_project_setup()
 
@@ -23,8 +32,10 @@ qt_add_executable(librepods
     trayiconmanager.h
     enums.h
     battery.hpp
-    BluetoothMonitor.cpp
-    BluetoothMonitor.h
+    bluetooth/BleInfo.h
+    bluetooth/IBluetoothMonitor.h
+    BluezBluetoothMonitor.cpp
+    BluezBluetoothMonitor.h
     autostartmanager.hpp
     BasicControlCommand.hpp
     deviceinfo.hpp
@@ -73,10 +84,15 @@ qt_add_resources(librepods "resources"
 )
 
 target_link_libraries(librepods
-    PRIVATE Qt6::Quick Qt6::Widgets Qt6::Bluetooth Qt6::DBus OpenSSL::SSL OpenSSL::Crypto ${PULSEAUDIO_LIBRARIES}
+    PRIVATE Qt6::Quick Qt6::Widgets Qt6::Bluetooth OpenSSL::SSL OpenSSL::Crypto
 )
 
-target_include_directories(librepods PRIVATE ${PULSEAUDIO_INCLUDE_DIRS})
+target_include_directories(librepods PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+if(NOT WIN32)
+    target_link_libraries(librepods PRIVATE Qt6::DBus ${PULSEAUDIO_LIBRARIES})
+    target_include_directories(librepods PRIVATE ${PULSEAUDIO_INCLUDE_DIRS})
+endif()
 
 include(GNUInstallDirs)
 install(TARGETS librepods
@@ -88,3 +104,7 @@ install(FILES assets/me.kavishdevar.librepods.desktop
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
 install(FILES assets/librepods.png
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps")
+
+if(LIBREPODS_ENABLE_WINDOWS_TARGET)
+    add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../windows windows-build)
+endif()

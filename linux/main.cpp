@@ -19,10 +19,14 @@
 #include "trayiconmanager.h"
 #include "enums.h"
 #include "battery.hpp"
-#include "BluetoothMonitor.h"
+#include "bluetooth/IBluetoothMonitor.h"
+#ifdef Q_OS_WIN
+#include "windows/bluetooth/WindowsBluetoothMonitor.h"
+#else
+#include "BluezBluetoothMonitor.h"
+#endif
 #include "autostartmanager.hpp"
 #include "deviceinfo.hpp"
-#include "ble/blemanager.h"
 #include "ble/bleutils.h"
 #include "ble/qt_aacptransport.h"
 #include "QRCodeImageProvider.hpp"
@@ -49,7 +53,7 @@ public:
     AirPodsTrayApp(bool debugMode, bool hideOnStart, QQmlApplicationEngine *parent = nullptr)
         : QObject(parent), debugMode(debugMode), m_settings(new QSettings("AirPodsTrayApp", "AirPodsTrayApp"))
         , m_autoStartManager(new AutoStartManager(this)), m_hideOnStart(hideOnStart), parent(parent)
-        , m_deviceInfo(new DeviceInfo(this)), m_bleManager(new BleManager(this))
+        , m_deviceInfo(new DeviceInfo(this))
         , m_systemSleepMonitor(new SystemSleepMonitor(this))
     {
         QLoggingCategory::setFilterRules(QString("librepods.debug=%1").arg(debugMode ? "true" : "false"));
@@ -74,11 +78,16 @@ public:
         connect(mediaController, &MediaController::mediaStateChanged, this, &AirPodsTrayApp::handleMediaStateChange);
         mediaController->followMediaChanges();
 
-        monitor = new BluetoothMonitor(this);
-        connect(monitor, &BluetoothMonitor::deviceConnected, this, &AirPodsTrayApp::bluezDeviceConnected);
-        connect(monitor, &BluetoothMonitor::deviceDisconnected, this, &AirPodsTrayApp::bluezDeviceDisconnected);
+        // Platform-specific Bluetooth monitor
+#ifdef Q_OS_WIN
+        m_bluetoothMonitor = new WindowsBluetoothMonitor(this);
+#else
+        m_bluetoothMonitor = new BluezBluetoothMonitor(this);
+#endif
 
-        connect(m_bleManager, &BleManager::deviceFound, this, &AirPodsTrayApp::bleDeviceFound);
+        connect(m_bluetoothMonitor, &IBluetoothMonitor::deviceConnected, this, &AirPodsTrayApp::bluezDeviceConnected);
+        connect(m_bluetoothMonitor, &IBluetoothMonitor::deviceDisconnected, this, &AirPodsTrayApp::bluezDeviceDisconnected);
+        connect(m_bluetoothMonitor, &IBluetoothMonitor::deviceFound, this, &AirPodsTrayApp::bleDeviceFound);
         connect(m_deviceInfo->getBattery(), &Battery::primaryChanged, this, &AirPodsTrayApp::primaryChanged);
         connect(m_systemSleepMonitor, &SystemSleepMonitor::systemGoingToSleep, this, &AirPodsTrayApp::onSystemGoingToSleep);
         connect(m_systemSleepMonitor, &SystemSleepMonitor::systemWakingUp, this, &AirPodsTrayApp::onSystemWakingUp);
@@ -103,7 +112,10 @@ public:
         setEarDetectionBehavior(loadEarDetectionSettings());
         setRetryAttempts(loadRetryAttempts());
 
-        monitor->checkAlreadyConnectedDevices();
+        if (m_bluetoothMonitor)
+        {
+            m_bluetoothMonitor->start();
+        }
         LOG_INFO("AirPodsTrayApp initialized");
 
         QBluetoothLocalDevice localDevice;
@@ -424,16 +436,19 @@ public slots:
 
     void onSystemGoingToSleep()
     {
-        if (m_bleManager->isScanning())
+        if (m_bluetoothMonitor && m_bluetoothMonitor->isScanning())
         {
             LOG_INFO("Stopping BLE scan before going to sleep");
-            m_bleManager->stopScan();
+            m_bluetoothMonitor->stopScan();
         }
     }
     void onSystemWakingUp()
     {
         LOG_INFO("System is waking up, starting ble scan");
-        m_bleManager->startScan();
+        if (m_bluetoothMonitor)
+        {
+            m_bluetoothMonitor->startScan();
+        }
 
         // Check if AirPods are already connected and activate A2DP profile
         if (areAirpodsConnected() && m_deviceInfo && !m_deviceInfo->bluetoothAddress().isEmpty())
@@ -450,7 +465,10 @@ public slots:
         }
 
         // Also check for already connected devices via BlueZ
-        monitor->checkAlreadyConnectedDevices();
+        if (m_bluetoothMonitor)
+        {
+            m_bluetoothMonitor->checkAlreadyConnectedDevices();
+        }
     }
 
 private slots:
@@ -531,7 +549,10 @@ private slots:
 
         // Clear the device name and model
         m_deviceInfo->reset();
-        m_bleManager->startScan();
+        if (m_bluetoothMonitor)
+        {
+            m_bluetoothMonitor->startScan();
+        }
         emit airPodsStatusChanged();
 
         // Show system notification
@@ -709,7 +730,10 @@ private slots:
             {
                 mediaController->activateA2dpProfile();
             }
-            m_bleManager->stopScan();
+            if (m_bluetoothMonitor)
+            {
+                m_bluetoothMonitor->stopScan();
+            }
             emit airPodsStatusChanged();
         }
         else if (data.startsWith(AirPodsPackets::OneBudANCMode::HEADER)) {
@@ -909,8 +933,8 @@ public:
         connectToPhone();
 
         m_deviceInfo->loadFromSettings(*m_settings);
-        if (!areAirpodsConnected()) {
-            m_bleManager->startScan();
+        if (!areAirpodsConnected() && m_bluetoothMonitor) {
+            m_bluetoothMonitor->startScan();
         }
     }
 
@@ -943,13 +967,12 @@ private:
     QByteArray lastEarDetectionStatus;
     MediaController* mediaController;
     TrayIconManager *trayManager;
-    BluetoothMonitor *monitor;
     QSettings *m_settings;
     AutoStartManager *m_autoStartManager;
     int m_retryAttempts = 3;
     bool m_hideOnStart = false;
     DeviceInfo *m_deviceInfo;
-    BleManager *m_bleManager;
+    IBluetoothMonitor *m_bluetoothMonitor = nullptr;
     SystemSleepMonitor *m_systemSleepMonitor = nullptr;
     QString m_phoneMacStatus;
 };

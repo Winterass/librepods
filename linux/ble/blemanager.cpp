@@ -2,6 +2,7 @@
 #include "enums.h"
 #include <QDebug>
 #include <QTimer>
+#include <QMetaType>
 #include "logger.h"
 #include <QMap>
 
@@ -84,6 +85,8 @@ QString getConnectionStateName(BleInfo::ConnectionState state)
 
 BleManager::BleManager(QObject *parent) : QObject(parent)
 {
+    qRegisterMetaType<BleInfo>("BleInfo");
+
     discoveryAgent = new QBluetoothDeviceDiscoveryAgent(this);
     discoveryAgent->setLowEnergyDiscoveryTimeout(0); // Continuous scanning
 
