@@ -659,3 +659,12 @@ obj/
 
 # End of https://www.toptal.com/developers/gitignore/api/qt,c++,clion,kotlin,python,android,pycharm,androidstudio,visualstudiocode,linux
 linux/.qmlls.ini
+
+# Windows specific
+windows/.vs/
+windows/**/bin/
+windows/**/obj/
+windows/**/*.user
+windows/**/*.suo
+windows/**/*.cache
+windows/packages/

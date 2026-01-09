@@ -1,0 +1,72 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-build.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Display .NET version
+      run: dotnet --version
+      
+    - name: Restore dependencies
+      working-directory: ./windows
+      run: dotnet restore
+      
+    - name: Build LibrePods.Core
+      working-directory: ./windows
+      run: dotnet build LibrePods.Core/LibrePods.Core.csproj -c Release --no-restore
+      
+    - name: Build LibrePods.Windows
+      working-directory: ./windows
+      run: dotnet build LibrePods.Windows/LibrePods.Windows.csproj -c Release --no-restore
+      
+    - name: Publish application
+      working-directory: ./windows
+      run: |
+        dotnet publish LibrePods.Windows/LibrePods.Windows.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained false `
+          -o publish/win-x64
+          
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: LibrePods-Windows-x64
+        path: windows/publish/win-x64/
+        retention-days: 30
+        
+    - name: Create portable ZIP
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      working-directory: ./windows/publish
+      run: |
+        Compress-Archive -Path win-x64/* -DestinationPath LibrePods-Windows-Portable.zip
+        
+    - name: Upload portable ZIP
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: LibrePods-Windows-Portable
+        path: windows/publish/LibrePods-Windows-Portable.zip
+        retention-days: 90
