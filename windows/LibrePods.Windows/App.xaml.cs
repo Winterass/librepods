@@ -24,7 +24,7 @@ namespace LibrePods.Windows;
 
 public partial class App : Application
 {
-    private AirPodsService? _airPodsService;
+    public AirPodsService? AirPodsService { get; private set; }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -34,14 +34,17 @@ public partial class App : Application
         Logger.MinimumLevel = Logger.LogLevel.Debug;
 
         // Initialize the AirPods service
-        _airPodsService = new AirPodsService();
-        _airPodsService.InitializeAsync().GetAwaiter().GetResult();
+        AirPodsService = new AirPodsService();
+        AirPodsService.InitializeAsync().GetAwaiter().GetResult();
+
+        // Store in resources for easy access
+        Resources["AirPodsService"] = AirPodsService;
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         Logger.Info("LibrePods for Windows shutting down...");
-        _airPodsService?.Dispose();
+        AirPodsService?.Dispose();
         base.OnExit(e);
     }
 }

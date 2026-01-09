@@ -38,6 +38,12 @@ Most features should work with any AirPods. Currently, I've only got AirPods Pro
 
 ## Platform Support
 
+### Windows
+
+Full Windows support with WPF application. See the [Windows README](./windows/README.md) for installation and setup instructions.
+
+**Status**: ✅ Fully implemented with battery monitoring, noise control, ear detection, and more
+
 ### Linux
 for the old version see the [Linux README](./linux/README.md). (doesn't have many features, maintainer didn't have time to work on it)
 
