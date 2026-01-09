@@ -17,6 +17,7 @@
 */
 
 using LibrePods.Core.Models;
+using LibrePods.Core.Protocol;
 using LibrePods.Core.Utils;
 using LibrePods.Windows.Audio;
 using LibrePods.Windows.Bluetooth;
