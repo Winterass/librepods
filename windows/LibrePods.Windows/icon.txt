@@ -1,0 +1,18 @@
+# Icon Placeholder
+
+LibrePods for Windows needs an icon file (`icon.ico`).
+
+For now, you can:
+1. Create an icon using an online converter (e.g., convert a PNG to ICO)
+2. Use the existing LibrePods logo from the `imgs/` directory
+3. Generate a simple icon using Windows built-in tools
+
+The icon file should be placed at:
+```
+windows/LibrePods.Windows/icon.ico
+```
+
+Icon specifications:
+- Format: .ico
+- Recommended sizes: 16x16, 32x32, 48x48, 256x256
+- Transparent background recommended

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Authors>LibrePods Contributors</Authors>
+    <Company>LibrePods</Company>
+    <Product>LibrePods Core</Product>
+    <Description>Core library for LibrePods - AAP Protocol implementation and utilities</Description>
+    <Copyright>Copyright (C) 2025 LibrePods contributors</Copyright>
+    <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
+  </PropertyGroup>
+
+</Project>
