@@ -92,20 +92,47 @@ public partial class MainWindow : Window
                 var device = devices[0];
                 
                 // Extract Bluetooth address from device
-                // Note: Device.Id is typically a GUID, need to get actual BT address
+                // Get the BluetoothDevice to access the BluetoothAddress property
                 string btAddress = string.Empty;
                 
-                // Try to get Bluetooth address from device properties
+                // Try to get Bluetooth address from device properties first
                 if (device.Properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object? addressObj))
                 {
                     btAddress = addressObj?.ToString() ?? string.Empty;
+                    Logger.Info($"Got Bluetooth address from device properties: {btAddress}");
                 }
                 
+                // If property not found, try to get BluetoothDevice and extract address from it
                 if (string.IsNullOrEmpty(btAddress))
                 {
-                    // Fallback: use device ID (may need adjustment based on actual device enumeration)
-                    Logger.Warning("Could not find Bluetooth address in device properties, using device ID");
-                    btAddress = device.Id;
+                    Logger.Info("Bluetooth address not in properties, trying to get from BluetoothDevice");
+                    
+                    // Try to get the BluetoothDevice from the DeviceInformation
+                    try
+                    {
+                        var btDevice = await Windows.Devices.Bluetooth.BluetoothDevice.FromIdAsync(device.Id);
+                        if (btDevice != null)
+                        {
+                            // Convert the Bluetooth address to hex string format
+                            btAddress = btDevice.BluetoothAddress.ToString("X12");
+                            Logger.Info($"Got Bluetooth address from BluetoothDevice: {btAddress}");
+                            btDevice.Dispose();
+                        }
+                        else
+                        {
+                            Logger.Error("Could not get BluetoothDevice from device ID");
+                            MessageBox.Show("Failed to get device information. Please ensure AirPods are properly paired.", 
+                                "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                            return;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error("Error getting BluetoothDevice", ex);
+                        MessageBox.Show($"Failed to access device: {ex.Message}", 
+                            "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
                 }
                 
                 await _airPodsService.ConnectAsync(btAddress);
