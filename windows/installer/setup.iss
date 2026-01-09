@@ -8,7 +8,7 @@
 #define MyAppExeName "LibrePods.Windows.exe"
 
 [Setup]
-AppId={{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}
+AppId={{7C4E8F9A-2B3D-4E5F-A6B7-8C9D0E1F2A3B}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -58,6 +58,8 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
 begin
   Result := True;
   if not IsDotNetInstalled() then

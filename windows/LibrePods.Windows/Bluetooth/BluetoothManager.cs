@@ -79,9 +79,29 @@ public class BluetoothManager : IDisposable
         {
             Logger.Info($"Connecting to device: {deviceAddress}");
 
+            // Parse the Bluetooth address
+            // deviceAddress should be in format like "XX:XX:XX:XX:XX:XX" or a numeric address
+            ulong bluetoothAddress;
+            
+            // Try to parse as colon-separated hex or direct numeric
+            if (deviceAddress.Contains(':'))
+            {
+                bluetoothAddress = ulong.Parse(deviceAddress.Replace(":", ""), System.Globalization.NumberStyles.HexNumber);
+            }
+            else if (deviceAddress.Length > 12)
+            {
+                // Might be a device ID string, try to extract Bluetooth address from device
+                // For now, log an error and return false
+                Logger.Error($"Invalid device address format: {deviceAddress}");
+                return false;
+            }
+            else
+            {
+                bluetoothAddress = ulong.Parse(deviceAddress, System.Globalization.NumberStyles.HexNumber);
+            }
+
             // Get the Bluetooth device
-            _device = await BluetoothDevice.FromBluetoothAddressAsync(
-                ulong.Parse(deviceAddress.Replace(":", ""), System.Globalization.NumberStyles.HexNumber));
+            _device = await BluetoothDevice.FromBluetoothAddressAsync(bluetoothAddress);
 
             if (_device == null)
             {

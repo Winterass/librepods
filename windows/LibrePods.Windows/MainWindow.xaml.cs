@@ -90,7 +90,25 @@ public partial class MainWindow : Window
                 // For simplicity, connect to the first device found
                 // In production, show a device selection dialog
                 var device = devices[0];
-                await _airPodsService.ConnectAsync(device.Id);
+                
+                // Extract Bluetooth address from device
+                // Note: Device.Id is typically a GUID, need to get actual BT address
+                string btAddress = string.Empty;
+                
+                // Try to get Bluetooth address from device properties
+                if (device.Properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object? addressObj))
+                {
+                    btAddress = addressObj?.ToString() ?? string.Empty;
+                }
+                
+                if (string.IsNullOrEmpty(btAddress))
+                {
+                    // Fallback: use device ID (may need adjustment based on actual device enumeration)
+                    Logger.Warning("Could not find Bluetooth address in device properties, using device ID");
+                    btAddress = device.Id;
+                }
+                
+                await _airPodsService.ConnectAsync(btAddress);
             }
         }
         catch (Exception ex)

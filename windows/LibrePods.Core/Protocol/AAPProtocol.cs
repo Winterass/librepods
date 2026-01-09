@@ -182,6 +182,9 @@ public static class AAPProtocol
     }
 }
 
+/// <summary>
+/// Head gesture types
+/// </summary>
 public enum HeadGesture
 {
     Unknown,
