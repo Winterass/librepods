@@ -28,6 +28,16 @@ public partial class MainWindow : Window
 {
     private readonly AirPodsService _airPodsService;
 
+    private const string ConnectionFailureMessage = 
+        "Failed to connect to AirPods. This may be due to:\n\n" +
+        "1. AirPods are not in range or turned on\n" +
+        "2. Bluetooth connection is busy with audio\n" +
+        "3. Windows Bluetooth limitations (RFCOMM vs L2CAP)\n\n" +
+        "Try:\n" +
+        "- Disconnecting audio first\n" +
+        "- Re-pairing your AirPods\n" +
+        "- Restarting the Bluetooth service";
+
     public MainWindow()
     {
         InitializeComponent();
@@ -110,13 +120,13 @@ public partial class MainWindow : Window
                     // Try to get the BluetoothDevice from the DeviceInformation
                     try
                     {
-                        var btDevice = await Windows.Devices.Bluetooth.BluetoothDevice.FromIdAsync(device.Id);
+                        using var btDevice = await Windows.Devices.Bluetooth.BluetoothDevice.FromIdAsync(device.Id);
                         if (btDevice != null)
                         {
-                            // Convert the Bluetooth address to hex string format
+                            // Convert the Bluetooth address to 12-character hex string format (uppercase without separators)
+                            // Example: "AABBCCDDEEFF" which will be parsed correctly by ConnectAsync
                             btAddress = btDevice.BluetoothAddress.ToString("X12");
                             Logger.Info($"Got Bluetooth address from BluetoothDevice: {btAddress}");
-                            btDevice.Dispose();
                         }
                         else
                         {
@@ -140,14 +150,7 @@ public partial class MainWindow : Window
                 if (!connected)
                 {
                     MessageBox.Show(
-                        "Failed to connect to AirPods. This may be due to:\n\n" +
-                        "1. AirPods are not in range or turned on\n" +
-                        "2. Bluetooth connection is busy with audio\n" +
-                        "3. Windows Bluetooth limitations (RFCOMM vs L2CAP)\n\n" +
-                        "Try:\n" +
-                        "- Disconnecting audio first\n" +
-                        "- Re-pairing your AirPods\n" +
-                        "- Restarting the Bluetooth service",
+                        ConnectionFailureMessage,
                         "Connection Failed",
                         MessageBoxButton.OK,
                         MessageBoxImage.Warning);
