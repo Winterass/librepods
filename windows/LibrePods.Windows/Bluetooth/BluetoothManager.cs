@@ -122,9 +122,12 @@ public class BluetoothManager : IDisposable
             // In production, implement proper L2CAP connection with AAP_PSM
             var services = await _device.GetRfcommServicesAsync(BluetoothCacheMode.Uncached);
             
+            Logger.Info($"Found {services.Services.Count} RFCOMM service(s)");
+            
             if (services.Services.Count > 0)
             {
                 var service = services.Services[0];
+                Logger.Info($"Connecting to service: {service.ServiceId}");
                 await _socket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName);
                 
                 _writer = new DataWriter(_socket.OutputStream);
@@ -145,7 +148,9 @@ public class BluetoothManager : IDisposable
                 return true;
             }
 
-            Logger.Error("No RFCOMM services found");
+            Logger.Error("No RFCOMM services found on device");
+            Logger.Error("Note: AirPods require L2CAP connection (PSM 0x1001) which is not fully supported by Windows UWP APIs");
+            Logger.Error("This is a known limitation. See README.md for more information about L2CAP support");
             return false;
         }
         catch (Exception ex)
