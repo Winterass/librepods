@@ -21,6 +21,7 @@ using System.Windows.Controls;
 using LibrePods.Core.Models;
 using LibrePods.Core.Utils;
 using LibrePods.Windows.Services;
+using Windows.Devices.Bluetooth;
 
 namespace LibrePods.Windows;
 
