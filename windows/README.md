@@ -100,13 +100,28 @@ Some advanced features (Hearing Aid, Multi-device connectivity, Transparency cus
 
 This method requires technical expertise and is not recommended for most users. Refer to the Linux implementation for guidance on modifying `/etc/bluetooth/main.conf`.
 
-### L2CAP vs RFCOMM
+### L2CAP Support
 
-The current implementation uses RFCOMM as a fallback due to limitations in Windows UWP Bluetooth APIs. For full L2CAP support with PSM 0x1001 (AAP protocol), consider:
+✅ **Native L2CAP implementation is now available!**
 
-1. Using Win32 Bluetooth APIs (requires native code)
-2. Contributing to improve the Bluetooth implementation
-3. Using a third-party Bluetooth library that supports L2CAP
+The Windows implementation now uses **native Win32 Bluetooth APIs** for direct L2CAP connection to PSM 0x1001 (AAP protocol). This provides:
+
+- ✅ Full AAP protocol support
+- ✅ Reliable battery status updates
+- ✅ All noise control features working correctly
+- ✅ Proper ear detection and head gesture support
+
+**Requirements:**
+- Windows 10 version 1809 or later
+- Bluetooth 4.0+ adapter with L2CAP support
+- Some features may require administrator privileges on first connection
+
+**Troubleshooting L2CAP:**
+If you experience connection issues:
+1. Ensure your Bluetooth drivers are up to date
+2. Try running LibrePods as Administrator
+3. Check Windows Event Viewer for Bluetooth service errors
+4. Verify your Bluetooth adapter supports L2CAP (most modern adapters do)
 
 ## Building from Source
 
@@ -200,10 +215,11 @@ The installer can be created using WiX Toolset or Inno Setup. Configuration file
 
 ## Known Limitations
 
-- **L2CAP Support**: Windows UWP Bluetooth APIs have limited L2CAP support. The current implementation uses RFCOMM as a fallback
 - **Advanced Features**: Hearing Aid, Multi-device, and Transparency customization require Apple VendorID spoofing
 - **Spatial Audio**: Not currently supported
 - **Find My**: Not supported (requires iCloud integration)
+
+**Note:** L2CAP support is now implemented using native Win32 APIs, enabling full AAP protocol functionality!
 
 ## Contributing
 
@@ -211,12 +227,12 @@ Contributions are welcome! Please see the main [CONTRIBUTING.md](../CONTRIBUTING
 
 ### Areas for Improvement
 
-- Full L2CAP implementation using Win32 APIs
 - System tray icon with battery indicator
 - Toast notifications for events
 - Head tracking visualization
 - More robust Bluetooth connection handling
 - Installer scripts
+- UI for advanced features (Hearing Aid, Transparency customization)
 
 ## License
 

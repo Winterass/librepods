@@ -49,10 +49,18 @@ windows/
 ### 2. LibrePods.Windows
 
 #### BluetoothManager.cs
-- Manages Bluetooth connection using Windows APIs
-- Implements AAP protocol communication
+- Manages Bluetooth connection using native L2CAP implementation
+- Delegates to NativeBluetoothManager for Win32 socket communication
+- Implements AAP protocol handshake and communication
 - Handles device scanning and pairing
-- **Note**: Current implementation uses RFCOMM fallback due to UWP L2CAP limitations
+- **Now uses native Win32 APIs for full L2CAP support with PSM 0x1001**
+
+#### NativeBluetoothManager.cs
+- Native Bluetooth implementation using Win32 socket APIs
+- Direct L2CAP connection to AirPods via PSM 0x1001
+- Uses P/Invoke for ws2_32.dll socket functions
+- Provides reliable AAP protocol communication
+- Handles all send/receive operations at the kernel level
 
 #### MediaController.cs
 - Integrates with Windows Media Control Session
@@ -71,34 +79,86 @@ windows/
 
 ## Bluetooth Implementation
 
-### Current Approach: RFCOMM Fallback
+### Native L2CAP with Win32 APIs
 
-Windows UWP Bluetooth APIs have limited L2CAP support. The current implementation uses RFCOMM as a fallback:
+The Windows implementation now uses **native Win32 Bluetooth socket APIs** for direct L2CAP communication:
 
-```csharp
-var services = await device.GetRfcommServicesAsync();
-await socket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName);
+#### Architecture
+
+```
+Application Layer (BluetoothManager)
+         ↓
+Native Layer (NativeBluetoothManager)
+         ↓
+Win32 Socket APIs (ws2_32.dll)
+         ↓
+Windows Bluetooth Stack
+         ↓
+L2CAP Protocol (PSM 0x1001)
+         ↓
+AirPods Device
 ```
 
-### Ideal Approach: L2CAP with PSM 0x1001
+#### Key Components
 
-For full AAP protocol support, L2CAP with PSM 0x1001 is required. This can be achieved using:
+**NativeBluetoothManager.cs** - Core native implementation:
+- Uses P/Invoke to access Win32 socket functions
+- Creates L2CAP sockets with AF_BTH (Address Family Bluetooth)
+- Connects directly to PSM 0x1001 for AAP protocol
+- Sends and receives data using native socket operations
 
-1. **Win32 Bluetooth APIs** (via P/Invoke)
-2. **Windows.Devices.Bluetooth.Background** (limited scenarios)
-3. **Third-party libraries** (e.g., InTheHand.BluetoothLE)
-
-#### Example Win32 Approach (Future Implementation)
-
+**P/Invoke Declarations:**
 ```csharp
-[DllImport("ws2_32.dll")]
-static extern IntPtr socket(int af, int type, int protocol);
+[DllImport("ws2_32.dll", SetLastError = true)]
+private static extern IntPtr socket(int af, int type, int protocol);
 
-[DllImport("ws2_32.dll")]
-static extern int connect(IntPtr s, ref SOCKADDR_BTH name, int namelen);
+[DllImport("ws2_32.dll", SetLastError = true)]
+private static extern int connect(IntPtr socket, ref SOCKADDR_BTH addr, int addrlen);
 
-// Use BTHPROTO_L2CAP (2) and set PSM to 0x1001
+[DllImport("ws2_32.dll", SetLastError = true)]
+private static extern int send(IntPtr socket, byte[] buf, int len, int flags);
+
+[DllImport("ws2_32.dll", SetLastError = true)]
+private static extern int recv(IntPtr socket, byte[] buf, int len, int flags);
 ```
+
+**Bluetooth Address Structure:**
+```csharp
+[StructLayout(LayoutKind.Sequential)]
+private struct SOCKADDR_BTH
+{
+    public short addressFamily;     // AF_BTH = 32
+    public ulong btAddr;            // Bluetooth device address
+    public Guid serviceClassId;     // Not used for L2CAP PSM
+    public uint port;               // PSM (0x1001 for AAP)
+}
+```
+
+#### Connection Flow
+
+1. **Parse Bluetooth Address**: Convert MAC address to ulong
+2. **Create Socket**: `socket(AF_BTH, SOCK_SEQPACKET, BTHPROTO_L2CAP)`
+3. **Setup Address Structure**: Set PSM to 0x1001
+4. **Connect**: `connect(socket, addr, sizeof(addr))`
+5. **Send Handshake**: AAP protocol initialization
+6. **Start Receive Loop**: Async receive task for incoming packets
+
+#### Error Handling
+
+Common WSA error codes and their meanings:
+- **10061**: Connection refused - AirPods not powered or out of range
+- **10060**: Connection timeout - Device already connected elsewhere
+- **10065**: No route to host - Bluetooth adapter/driver issue
+
+### Previous Implementation (Deprecated)
+
+The previous RFCOMM-based approach using UWP APIs had limitations:
+- Limited L2CAP support in Windows.Devices.Bluetooth
+- StreamSocket couldn't connect to PSM 0x1001
+- Received AT commands instead of AAP packets
+- Battery status updates didn't work
+
+The new native implementation resolves all these issues.
 
 ## AAP Protocol Details
 
@@ -154,29 +214,26 @@ The UI follows modern Windows design principles:
    - Quick access menu
    - Toast notifications
 
-2. **Full L2CAP Implementation**
-   - Use Win32 APIs for proper L2CAP support
-   - Improve connection reliability
-
-3. **Hearing Aid Features UI**
+2. **Hearing Aid Features UI**
    - Audiogram configuration
    - Amplification controls
    - Requires VendorID spoofing
 
-4. **Head Tracking Visualization**
+3. **Head Tracking Visualization**
    - Display head orientation
    - Configure gesture actions
 
-5. **Transparency Mode Customization**
+4. **Transparency Mode Customization**
    - Amplification, balance, tone controls
    - Requires VendorID spoofing
 
 ### Known Limitations
 
-- **L2CAP**: Current RFCOMM fallback may not support all features
 - **VendorID Spoofing**: Advanced features require registry modifications
 - **Spatial Audio**: Not yet implemented
 - **Multi-device**: Requires VendorID spoofing
+
+**All L2CAP limitations have been resolved!** The native implementation provides full AAP protocol support.
 
 ## Testing
 

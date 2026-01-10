@@ -37,14 +37,14 @@ jobs:
       working-directory: ./windows
       run: dotnet build LibrePods.Core/LibrePods.Core.csproj -c Release --no-restore
       
-    - name: Build LibrePods.Windows
+    - name: Build LibrePods.Desktop
       working-directory: ./windows
-      run: dotnet build LibrePods.Windows/LibrePods.Windows.csproj -c Release --no-restore
+      run: dotnet build LibrePods.Desktop/LibrePods.Desktop.csproj -c Release --no-restore
       
     - name: Publish application
       working-directory: ./windows
       run: |
-        dotnet publish LibrePods.Windows/LibrePods.Windows.csproj `
+        dotnet publish LibrePods.Desktop/LibrePods.Desktop.csproj `
           -c Release `
           -r win-x64 `
           --self-contained false `
