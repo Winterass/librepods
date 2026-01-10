@@ -20,16 +20,16 @@ using System.Windows;
 using System.Windows.Controls;
 using LibrePods.Core.Models;
 using LibrePods.Core.Utils;
-using LibrePods.Windows.Services;
 using Windows.Devices.Bluetooth;
+using LibrePods.Desktop.Services;
 
-namespace LibrePods.Windows;
+namespace LibrePods.Desktop;
 
 public partial class MainWindow : Window
 {
     private readonly AirPodsService _airPodsService;
 
-    private const string ConnectionFailureMessage = 
+    private const string ConnectionFailureMessage =
         "Failed to connect to AirPods. This may be due to:\n\n" +
         "1. AirPods are not in range or turned on\n" +
         "2. Bluetooth connection is busy with audio\n" +
@@ -42,10 +42,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        
-        _airPodsService = ((App)Application.Current).Resources["AirPodsService"] as AirPodsService 
+
+        _airPodsService = ((App)Application.Current).Resources["AirPodsService"] as AirPodsService
             ?? new AirPodsService();
-        
+
         // Subscribe to events
         _airPodsService.OnConnectionChanged += OnConnectionChanged;
         _airPodsService.OnStatusUpdate += OnStatusUpdate;
@@ -90,10 +90,10 @@ public partial class MainWindow : Window
             {
                 // Scan for devices
                 var devices = await _airPodsService.ScanForAirPodsAsync();
-                
+
                 if (devices.Count == 0)
                 {
-                    MessageBox.Show("No AirPods found. Please make sure they are paired with Windows.", 
+                    MessageBox.Show("No AirPods found. Please make sure they are paired with Windows.",
                         "No Devices", MessageBoxButton.OK, MessageBoxImage.Information);
                     return;
                 }
@@ -101,23 +101,23 @@ public partial class MainWindow : Window
                 // For simplicity, connect to the first device found
                 // In production, show a device selection dialog
                 var device = devices[0];
-                
+
                 // Extract Bluetooth address from device
                 // Get the BluetoothDevice to access the BluetoothAddress property
                 string btAddress = string.Empty;
-                
+
                 // Try to get Bluetooth address from device properties first
                 if (device.Properties.TryGetValue("System.Devices.Aep.DeviceAddress", out object? addressObj))
                 {
                     btAddress = addressObj?.ToString() ?? string.Empty;
                     Logger.Info($"Got Bluetooth address from device properties: {btAddress}");
                 }
-                
+
                 // If property not found, try to get BluetoothDevice and extract address from it
                 if (string.IsNullOrEmpty(btAddress))
                 {
                     Logger.Info("Bluetooth address not in properties, trying to get from BluetoothDevice");
-                    
+
                     // Try to get the BluetoothDevice from the DeviceInformation
                     try
                     {
@@ -132,7 +132,7 @@ public partial class MainWindow : Window
                         else
                         {
                             Logger.Error("Could not get BluetoothDevice from device ID");
-                            MessageBox.Show("Failed to get device information. Please ensure AirPods are properly paired.", 
+                            MessageBox.Show("Failed to get device information. Please ensure AirPods are properly paired.",
                                 "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
                             return;
                         }
@@ -140,14 +140,14 @@ public partial class MainWindow : Window
                     catch (Exception ex)
                     {
                         Logger.Error("Error getting BluetoothDevice", ex);
-                        MessageBox.Show($"Failed to access device: {ex.Message}", 
+                        MessageBox.Show($"Failed to access device: {ex.Message}",
                             "Connection Error", MessageBoxButton.OK, MessageBoxImage.Error);
                         return;
                     }
                 }
-                
+
                 var connected = await _airPodsService.ConnectAsync(btAddress);
-                
+
                 if (!connected)
                 {
                     MessageBox.Show(
@@ -171,7 +171,7 @@ public partial class MainWindow : Window
         {
             ConnectionStatus.Text = isConnected ? "Connected" : "Disconnected";
             ConnectButton.Content = isConnected ? "Disconnect" : "Connect";
-            
+
             // Enable/disable controls based on connection
             NoiseControlOff.IsEnabled = isConnected;
             NoiseControlTransparency.IsEnabled = isConnected;
@@ -255,8 +255,8 @@ public partial class MainWindow : Window
 
         // Update conversational awareness
         ConversationalAwarenessCheckBox.IsChecked = status.ConversationalAwarenessEnabled;
-        ConversationalAwarenessStatus.Text = status.ConversationalAwarenessActive 
-            ? "Status: Active" 
+        ConversationalAwarenessStatus.Text = status.ConversationalAwarenessActive
+            ? "Status: Active"
             : "Status: Inactive";
 
         // Update device name
@@ -334,19 +334,19 @@ public partial class MainWindow : Window
             var newName = DeviceNameTextBox.Text?.Trim();
             if (string.IsNullOrEmpty(newName))
             {
-                MessageBox.Show("Please enter a valid device name.", "Invalid Name", 
+                MessageBox.Show("Please enter a valid device name.", "Invalid Name",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
             await _airPodsService.RenameAsync(newName);
-            MessageBox.Show("Device renamed successfully. You may need to re-pair for the name to take effect.", 
+            MessageBox.Show("Device renamed successfully. You may need to re-pair for the name to take effect.",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
             Logger.Error("Error renaming device", ex);
-            MessageBox.Show($"Error: {ex.Message}", "Rename Error", 
+            MessageBox.Show($"Error: {ex.Message}", "Rename Error",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

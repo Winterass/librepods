@@ -19,7 +19,7 @@
 using LibrePods.Core.Utils;
 using Windows.Media.Control;
 
-namespace LibrePods.Windows.Audio;
+namespace LibrePods.Desktop.Audio;
 
 /// <summary>
 /// Manages Windows media playback control for ear detection integration

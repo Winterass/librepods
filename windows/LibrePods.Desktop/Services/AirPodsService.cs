@@ -19,11 +19,11 @@
 using LibrePods.Core.Models;
 using LibrePods.Core.Protocol;
 using LibrePods.Core.Utils;
-using LibrePods.Windows.Audio;
-using LibrePods.Windows.Bluetooth;
 using Windows.Devices.Enumeration;
+using LibrePods.Desktop.Audio;
+using LibrePods.Desktop.Bluetooth;
 
-namespace LibrePods.Windows.Services;
+namespace LibrePods.Desktop.Services;
 
 /// <summary>
 /// Main service that coordinates all LibrePods functionality
@@ -62,7 +62,7 @@ public class AirPodsService : IDisposable
     public async Task InitializeAsync()
     {
         Logger.Info("Initializing AirPods service...");
-        
+
         try
         {
             await _mediaController.InitializeAsync();
@@ -124,7 +124,7 @@ public class AirPodsService : IDisposable
     private async void HandleEarDetectionChanged(EarDetectionStatus status)
     {
         OnEarDetectionChanged?.Invoke(status);
-        
+
         // Handle automatic media control
         await _earDetectionController.HandleEarDetectionChangeAsync(status);
     }
@@ -139,7 +139,7 @@ public class AirPodsService : IDisposable
     {
         Logger.Info($"Head gesture detected: {gesture}");
         OnHeadGesture?.Invoke(gesture);
-        
+
         // You can implement custom actions here
         // For example, answering calls on nod gesture
     }

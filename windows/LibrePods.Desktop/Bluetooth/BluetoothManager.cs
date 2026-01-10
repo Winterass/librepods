@@ -26,7 +26,7 @@ using Windows.Devices.Enumeration;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
 
-namespace LibrePods.Windows.Bluetooth;
+namespace LibrePods.Desktop.Bluetooth;
 
 /// <summary>
 /// Manages Bluetooth connection and communication with AirPods using Windows Bluetooth APIs
@@ -58,10 +58,10 @@ public class BluetoothManager : IDisposable
     public async Task<List<DeviceInformation>> ScanForAirPodsAsync()
     {
         Logger.Info("Scanning for paired AirPods...");
-        
+
         var selector = BluetoothDevice.GetDeviceSelector();
         var devices = await DeviceInformation.FindAllAsync(selector);
-        
+
         var airPodsDevices = devices
             .Where(d => d.Name.Contains("AirPods", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -82,7 +82,7 @@ public class BluetoothManager : IDisposable
             // Parse the Bluetooth address
             // deviceAddress should be in format like "XX:XX:XX:XX:XX:XX" or a numeric address
             ulong bluetoothAddress;
-            
+
             // Try to parse as colon-separated hex or direct numeric
             if (deviceAddress.Contains(':'))
             {
@@ -115,21 +115,21 @@ public class BluetoothManager : IDisposable
             // Note: Windows UWP Bluetooth API has limited L2CAP support
             // For production use, consider using Win32 Bluetooth APIs or RFCOMM fallback
             // This is a simplified implementation using StreamSocket
-            
+
             _socket = new StreamSocket();
-            
+
             // Try to connect using RFCOMM as fallback
             // In production, implement proper L2CAP connection with AAP_PSM
             var services = await _device.GetRfcommServicesAsync(BluetoothCacheMode.Uncached);
-            
+
             Logger.Info($"Found {services.Services.Count} RFCOMM service(s)");
-            
+
             if (services.Services.Count > 0)
             {
                 var service = services.Services[0];
                 Logger.Info($"Connecting to service: {service.ServiceId}");
                 await _socket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName);
-                
+
                 _writer = new DataWriter(_socket.OutputStream);
                 _reader = new DataReader(_socket.InputStream);
                 _reader.InputStreamOptions = InputStreamOptions.Partial;
@@ -166,10 +166,10 @@ public class BluetoothManager : IDisposable
     public void Disconnect()
     {
         Logger.Info("Disconnecting...");
-        
+
         _receiveCts?.Cancel();
         _receiveTask?.Wait(TimeSpan.FromSeconds(2));
-        
+
         _writer?.Dispose();
         _reader?.Dispose();
         _socket?.Dispose();
@@ -185,15 +185,15 @@ public class BluetoothManager : IDisposable
     private async Task SendHandshakeAsync()
     {
         Logger.Debug("Sending handshake...");
-        
+
         await SendPacketAsync(AAPProtocol.GetHandshakePacket());
         await Task.Delay(100);
-        
+
         await SendPacketAsync(AAPProtocol.GetEnableFeaturesPacket());
         await Task.Delay(100);
-        
+
         await SendPacketAsync(AAPProtocol.GetRequestNotificationsPacket());
-        
+
         Logger.Debug("Handshake completed");
     }
 
@@ -226,7 +226,7 @@ public class BluetoothManager : IDisposable
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
         Logger.Info("Started receive loop");
-        
+
         while (!ct.IsCancellationRequested && _isConnected)
         {
             try
@@ -241,7 +241,7 @@ public class BluetoothManager : IDisposable
                 _reader.ReadBytes(buffer);
 
                 Logger.Debug($"Received: {buffer.ToHexString()}");
-                
+
                 ProcessPacket(buffer);
             }
             catch (Exception ex)
@@ -253,7 +253,7 @@ public class BluetoothManager : IDisposable
                 break;
             }
         }
-        
+
         Logger.Info("Receive loop stopped");
     }
 

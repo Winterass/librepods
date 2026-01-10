@@ -17,6 +17,7 @@
 */
 
 using LibrePods.Core.Models;
+using LibrePods.Core.Utils;
 
 namespace LibrePods.Core.Protocol;
 
@@ -27,13 +28,13 @@ namespace LibrePods.Core.Protocol;
 public static class AAPProtocol
 {
     // Standard AAP message prefixes
-    private static readonly byte[] HANDSHAKE_PACKET = new byte[] 
+    private static readonly byte[] HANDSHAKE_PACKET = new byte[]
     { 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    
-    private static readonly byte[] ENABLE_FEATURES_PACKET = new byte[] 
+
+    private static readonly byte[] ENABLE_FEATURES_PACKET = new byte[]
     { 0x04, 0x00, 0x04, 0x00, 0x4d, 0x00, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-    
-    private static readonly byte[] REQUEST_NOTIFICATIONS_PACKET = new byte[] 
+
+    private static readonly byte[] REQUEST_NOTIFICATIONS_PACKET = new byte[]
     { 0x04, 0x00, 0x04, 0x00, 0x0F, 0x00, 0xFF, 0xFF, 0xFF, 0xFF };
 
     /// <summary>
@@ -58,19 +59,23 @@ public static class AAPProtocol
     public static List<BatteryInfo> ParseBatteryPacket(byte[] data)
     {
         var batteries = new List<BatteryInfo>();
-        
+
+        Logger.Info(batteries.Count + " batteries are parsed");
+
         if (data.Length < 7) return batteries;
         if (data[0] != 0x04 || data[2] != 0x04 || data[4] != 0x04) return batteries;
 
         int batteryCount = data[6];
         int offset = 7;
 
+        Logger.Info(batteryCount + " battery count");
+
         for (int i = 0; i < batteryCount && offset + 5 <= data.Length; i++)
         {
             var component = (BatteryComponent)data[offset];
             int level = data[offset + 2];
             var status = (BatteryStatus)data[offset + 3];
-            
+
             batteries.Add(new BatteryInfo(component, level, status));
             offset += 5;
         }
@@ -144,7 +149,7 @@ public static class AAPProtocol
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
         var packet = new byte[7 + nameBytes.Length];
-        
+
         packet[0] = 0x04;
         packet[1] = 0x00;
         packet[2] = 0x04;
@@ -152,9 +157,9 @@ public static class AAPProtocol
         packet[4] = 0x05; // Rename command
         packet[5] = 0x00;
         packet[6] = (byte)nameBytes.Length;
-        
+
         Array.Copy(nameBytes, 0, packet, 7, nameBytes.Length);
-        
+
         return packet;
     }
 

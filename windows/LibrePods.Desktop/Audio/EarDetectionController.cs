@@ -19,7 +19,7 @@
 using LibrePods.Core.Models;
 using LibrePods.Core.Utils;
 
-namespace LibrePods.Windows.Audio;
+namespace LibrePods.Desktop.Audio;
 
 /// <summary>
 /// Manages ear detection and automatic audio control

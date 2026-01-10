@@ -18,9 +18,9 @@
 
 using System.Windows;
 using LibrePods.Core.Utils;
-using LibrePods.Windows.Services;
+using LibrePods.Desktop.Services;
 
-namespace LibrePods.Windows;
+namespace LibrePods.Desktop;
 
 public partial class App : Application
 {
