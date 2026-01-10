@@ -51,6 +51,27 @@ public class NativeBluetoothManager : IDisposable
     [DllImport("ws2_32.dll", SetLastError = true)]
     private static extern int WSAGetLastError();
 
+    [DllImport("ws2_32.dll", SetLastError = true)]
+    private static extern int WSAStartup(ushort wVersionRequested, ref WSADATA lpWSAData);
+
+    [DllImport("ws2_32.dll", SetLastError = true)]
+    private static extern int WSACleanup();
+
+    // WSADATA structure for WSAStartup
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WSADATA
+    {
+        public ushort wVersion;
+        public ushort wHighVersion;
+        public ushort iMaxSockets;
+        public ushort iMaxUdpDg;
+        public IntPtr lpVendorInfo;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 257)]
+        public byte[] szDescription;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 129)]
+        public byte[] szSystemStatus;
+    }
+
     // Bluetooth address structure for L2CAP
     [StructLayout(LayoutKind.Sequential)]
     private struct SOCKADDR_BTH
@@ -68,6 +89,35 @@ public class NativeBluetoothManager : IDisposable
     private const uint AAP_PSM = 0x1001;            // AirPods Accessory Protocol PSM
     private const int INVALID_SOCKET = -1;
     private const int SOCKET_ERROR = -1;
+    private static readonly IntPtr INVALID_SOCKET_HANDLE = (IntPtr)(-1);
+
+    #endregion
+
+    #region Static Initialization
+
+    /// <summary>
+    /// Static constructor to initialize Winsock
+    /// </summary>
+    static NativeBluetoothManager()
+    {
+        // Initialize Winsock 2.2
+        WSADATA wsaData = new WSADATA
+        {
+            szDescription = new byte[257],
+            szSystemStatus = new byte[129]
+        };
+        
+        ushort version = 0x0202; // Version 2.2 (high byte = major, low byte = minor)
+        int result = WSAStartup(version, ref wsaData);
+        
+        if (result != 0)
+        {
+            Logger.Error($"WSAStartup failed with error: {result}");
+            throw new Exception($"Failed to initialize Winsock. Error code: {result}");
+        }
+        
+        Logger.Debug($"Winsock initialized successfully. Version: {wsaData.wVersion:X4}");
+    }
 
     #endregion
 
@@ -109,7 +159,7 @@ public class NativeBluetoothManager : IDisposable
             // Create L2CAP socket
             _socketHandle = socket(AF_BTH, SOCK_SEQPACKET, BTHPROTO_L2CAP);
 
-            if (_socketHandle == IntPtr.Zero || _socketHandle == new IntPtr(INVALID_SOCKET))
+            if (_socketHandle == IntPtr.Zero || _socketHandle == INVALID_SOCKET_HANDLE)
             {
                 int error = WSAGetLastError();
                 Logger.Error($"Failed to create L2CAP socket. WSA Error: {error}");
@@ -194,7 +244,7 @@ public class NativeBluetoothManager : IDisposable
             }
         }
 
-        if (_socketHandle != IntPtr.Zero && _socketHandle != new IntPtr(INVALID_SOCKET))
+        if (_socketHandle != IntPtr.Zero && _socketHandle != INVALID_SOCKET_HANDLE)
         {
             closesocket(_socketHandle);
             _socketHandle = IntPtr.Zero;
@@ -281,7 +331,7 @@ public class NativeBluetoothManager : IDisposable
     /// </summary>
     private async Task SendPacketAsync(byte[] data)
     {
-        if (!_isConnected || _socketHandle == IntPtr.Zero || _socketHandle == new IntPtr(INVALID_SOCKET))
+        if (!_isConnected || _socketHandle == IntPtr.Zero || _socketHandle == INVALID_SOCKET_HANDLE)
         {
             Logger.Warning("Cannot send packet: not connected");
             return;
