@@ -264,9 +264,10 @@ int main(int argc, char *argv[])
     // Create main application
     WindowsAirPodsApp *mainApp = new WindowsAirPodsApp(debugMode);
 
-    // Auto-connect if address provided
+    // Auto-connect if address provided (delay to allow initialization)
+    constexpr int AUTO_CONNECT_DELAY_MS = 1000;
     if (!address.isEmpty()) {
-        QTimer::singleShot(1000, [mainApp, address]() {
+        QTimer::singleShot(AUTO_CONNECT_DELAY_MS, [mainApp, address]() {
             mainApp->connectToAirPods(address);
         });
     }

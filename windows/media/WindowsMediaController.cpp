@@ -99,13 +99,16 @@ WindowsMediaController::MediaState WindowsMediaController::getCurrentMediaState(
 bool WindowsMediaController::play()
 {
 #ifdef _WIN32
-    // Simulate media play key press
-    // VK_MEDIA_PLAY_PAUSE is 0xB3
-    keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
-    keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0);
-    
-    m_currentState = Playing;
-    emit mediaStateChanged(m_currentState);
+    // Note: Windows VK_MEDIA_PLAY_PAUSE toggles play/pause
+    // Since we can't determine actual media state, we use this as best effort
+    // Only send if we think we're not already playing
+    if (m_currentState != Playing) {
+        keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
+        keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0);
+        
+        m_currentState = Playing;
+        emit mediaStateChanged(m_currentState);
+    }
     return true;
 #else
     return false;
@@ -115,12 +118,16 @@ bool WindowsMediaController::play()
 bool WindowsMediaController::pause()
 {
 #ifdef _WIN32
-    // Simulate media pause key press
-    keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
-    keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0);
-    
-    m_currentState = Paused;
-    emit mediaStateChanged(m_currentState);
+    // Note: Windows VK_MEDIA_PLAY_PAUSE toggles play/pause
+    // Since we can't determine actual media state, we use this as best effort
+    // Only send if we think we're playing
+    if (m_currentState == Playing) {
+        keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
+        keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0);
+        
+        m_currentState = Paused;
+        emit mediaStateChanged(m_currentState);
+    }
     return true;
 #else
     return false;
@@ -134,8 +141,13 @@ bool WindowsMediaController::togglePlayPause()
     keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0);
     keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0);
     
-    // Toggle state
-    m_currentState = (m_currentState == Playing) ? Paused : Playing;
+    // Toggle state (with proper handling of Unknown/Stopped)
+    if (m_currentState == Playing) {
+        m_currentState = Paused;
+    } else {
+        // For Unknown, Stopped, or Paused - assume we're starting playback
+        m_currentState = Playing;
+    }
     emit mediaStateChanged(m_currentState);
     return true;
 #else
