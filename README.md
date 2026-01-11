@@ -38,6 +38,17 @@ Most features should work with any AirPods. Currently, I've only got AirPods Pro
 
 ## Platform Support
 
+### Windows
+Windows 11 support is now available! See the [Windows README](./windows/README.md) for installation and setup instructions.
+
+**Key Features**:
+- Full Bluetooth L2CAP support via Bumble
+- Noise control modes
+- Battery monitoring
+- Auto play/pause with ear detection
+- System tray integration
+- Media controls
+
 ### Linux
 for the old version see the [Linux README](./linux/README.md). (doesn't have many features, maintainer didn't have time to work on it)
 

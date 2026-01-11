@@ -1,0 +1,9 @@
+# Windows-specific Python dependencies for LibrePods
+
+# Bumble Bluetooth stack for Windows
+# See https://github.com/google/bumble/blob/main/docs/mkdocs/src/platforms/windows.md
+bumble>=0.0.167
+
+# Required by bumble
+pyusb>=1.2.1
+libusb>=1.0.26
