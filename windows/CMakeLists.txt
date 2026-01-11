@@ -13,6 +13,7 @@ qt_standard_project_setup()
 
 # Windows-specific sources
 set(WINDOWS_SOURCES
+    main.cpp
     bluetooth/WindowsBluetoothManager.cpp
     bluetooth/WindowsBluetoothManager.h
     media/WindowsAudioController.cpp
